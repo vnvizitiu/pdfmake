@@ -90,12 +90,32 @@ describe('TextTools', function () {
 		'         text having two lines       '
 	];
 
+	var textWithLeadingIndent = {
+		text:
+			'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut porttitor risus sapien, at commodo eros suscipit ' +
+			'nec. Pellentesque pretium, justo eleifend pulvinar malesuada, lorem arcu pellentesque ex, ac congue arcu erat ' +
+			'id nunc. Morbi facilisis pulvinar nunc, quis laoreet ligula rutrum ut. Mauris at ante imperdiet, vestibulum ' +
+			'libero nec, iaculis justo. Mauris aliquam congue ligula vel convallis. Duis iaculis ornare nulla, id finibus ' +
+			'sapien commodo quis. Sed semper sagittis urna. Nunc aliquam aliquet placerat. Maecenas ac arcu auctor, ' +
+			'bibendum nisl non, bibendum odio. Proin semper lacus faucibus, pretium neque nec, viverra sem. ',
+		leadingIndent: 10
+	};
+
+	var textWithLeadingSpaces = [
+		{text: '    This is a paragraph', preserveLeadingSpaces: true}
+	];
+
 	var mixedTextArrayWithVariousTypes = [
 		{text: ''},
 		{text: null},
 		{text: 2016},
 		{text: true},
-		{text: false}
+		{text: false},
+		'',
+		null,
+		2016,
+		true,
+		false
 	];
 
 	var styleStack = new StyleContextStack({
@@ -172,32 +192,32 @@ describe('TextTools', function () {
 
 	describe('normalizeTextArray', function () {
 		it('should support plain strings', function () {
-			var result = textTools.normalizeTextArray(plainText);
+			var result = textTools.normalizeTextArray(plainText, styleStack);
 			assert.equal(result.length, 6);
 		});
 
 		it('should support plain strings with new-lines', function () {
-			var result = textTools.normalizeTextArray(plainText);
+			var result = textTools.normalizeTextArray(plainText, styleStack);
 			assert(result[3].lineEnd);
 		});
 
 		it('should support an array of plain strings', function () {
-			var result = textTools.normalizeTextArray(plainTextArray);
+			var result = textTools.normalizeTextArray(plainTextArray, styleStack);
 			assert.equal(result.length, 7);
 		});
 
 		it('should support an array of plain strings with new-lines', function () {
-			var result = textTools.normalizeTextArray(plainTextArray);
+			var result = textTools.normalizeTextArray(plainTextArray, styleStack);
 			assert.equal(result[4].lineEnd, true);
 		});
 
 		it('should support arrays with style definition', function () {
-			var result = textTools.normalizeTextArray(mixedTextArray);
+			var result = textTools.normalizeTextArray(mixedTextArray, styleStack);
 			assert.equal(result.length, 7);
 		});
 
 		it('should keep style definitions after splitting new-lines', function () {
-			var result = textTools.normalizeTextArray(mixedTextArray);
+			var result = textTools.normalizeTextArray(mixedTextArray, styleStack);
 			[0, 2, 3, 4, 5, 6].forEach(function (i) {
 				assert.equal(result[i].bold, true);
 			});
@@ -206,18 +226,36 @@ describe('TextTools', function () {
 		});
 
 		it('should keep unknown style fields after splitting new-lines', function () {
-			var result = textTools.normalizeTextArray(mixedTextArrayWithUnknownStyleDefinitions);
+			var result = textTools.normalizeTextArray(mixedTextArrayWithUnknownStyleDefinitions, styleStack);
 			assert.equal(result.length, 7);
 			assert.equal(result[5].unknownStyle, 123);
 			assert.equal(result[6].unknownStyle, 123);
 		});
 
 		it('should support cast to text', function () {
-			var result = textTools.normalizeTextArray(mixedTextArrayWithVariousTypes);
-			assert.equal(result.length, 3);
+			var result = textTools.normalizeTextArray(mixedTextArrayWithVariousTypes, styleStack);
+			assert.equal(result.length, 6);
 			assert.equal(result[0].text, '2016');
 			assert.equal(result[1].text, 'true');
 			assert.equal(result[2].text, 'false');
+			assert.equal(result[3].text, '2016');
+			assert.equal(result[4].text, 'true');
+			assert.equal(result[5].text, 'false');
+		});
+
+		it('should support keep noWrap from style', function () {
+			var result = textTools.normalizeTextArray([{text: 'very long text'}], styleStackNoWrap);
+			assert.equal(result.length, 1);
+		});
+
+		it('should support disable noWrap in text', function () {
+			var result = textTools.normalizeTextArray([{text: 'very long text', noWrap: false}], styleStackNoWrap);
+			assert.equal(result.length, 3);
+		});
+
+		it('should support enable noWrap in text', function () {
+			var result = textTools.normalizeTextArray([{text: 'very long text', noWrap: true}], styleStack);
+			assert.equal(result.length, 1);
 		});
 
 	});
@@ -354,6 +392,18 @@ describe('TextTools', function () {
 			assert.equal(inlines.maxWidth, 52 * 12);
 		});
 
+		it('should set set the leading indent only to the first line of a paragraph', function() {
+			var inlines = textTools.buildInlines(textWithLeadingIndent);
+			assert.equal(inlines.items[0].leadingCut, -10);
+			var countLeadingCut = 0;
+			inlines.items.forEach(function(item) { countLeadingCut += item.leadingCut; });
+			assert.equal(countLeadingCut, -10);
+		});
+
+		it('should preserve leading whitespaces when preserveLeadingSpaces is set', function() {
+			var inlines = textTools.buildInlines(textWithLeadingSpaces);
+			assert.equal(inlines.maxWidth, 23 * 12);
+		});
 	});
 
 	describe('sizeOfString', function () {

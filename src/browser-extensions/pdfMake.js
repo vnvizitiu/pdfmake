@@ -43,8 +43,11 @@ Document.prototype._createDoc = function (options, callback) {
 	var chunks = [];
 	var result;
 
-	doc.on('data', function (chunk) {
-		chunks.push(chunk);
+	doc.on('readable', function () {
+		var chunk;
+		while ((chunk = doc.read(9007199254740991)) !== null) {
+			chunks.push(chunk);
+		}
 	});
 	doc.on('end', function () {
 		result = Buffer.concat(chunks);
@@ -55,7 +58,7 @@ Document.prototype._createDoc = function (options, callback) {
 
 Document.prototype._getPages = function (options, cb) {
 	if (!cb) {
-		throw 'getBuffer is an async method and needs a callback argument';
+		throw '_getPages is an async method and needs a callback argument';
 	}
 	this._createDoc(options, function (ignoreBuffer, pages) {
 		cb(pages);
@@ -84,7 +87,7 @@ Document.prototype._bufferToBlob = function (buffer) {
 Document.prototype._openWindow = function () {
 	// we have to open the window immediately and store the reference
 	// otherwise popup blockers will stop us
-	var win = window.open('', '_blank');
+	var win = global.open('', '_blank');
 	if (win === null) {
 		throw 'Open PDF in new window blocked by browser';
 	}
@@ -92,57 +95,53 @@ Document.prototype._openWindow = function () {
 	return win;
 };
 
-Document.prototype.open = function () {
-	var win = this._openWindow();
-
+Document.prototype._openPdf = function (options, win) {
+	if (!win) {
+		win = this._openWindow();
+	}
 	try {
-		var that = this;
-		this.getBuffer(function (result) {
-			var blob = that._bufferToBlob(result);
-			var urlCreator = window.URL || window.webkitURL;
-			var pdfUrl = urlCreator.createObjectURL(blob);
+		this.getBlob(function (result) {
+			var urlCreator = global.URL || global.webkitURL;
+			var pdfUrl = urlCreator.createObjectURL(result);
 			win.location.href = pdfUrl;
-		}, {autoPrint: false});
+		}, options);
 	} catch (e) {
 		win.close();
 		throw e;
 	}
 };
 
+Document.prototype.open = function (options, win) {
+	options = options || {};
+	options.autoPrint = false;
+	win = win || null;
 
-Document.prototype.print = function () {
-	var win = this._openWindow();
-
-	try {
-		var that = this;
-		this.getBuffer(function (result) {
-			var blob = that._bufferToBlob(result);
-			var urlCreator = window.URL || window.webkitURL;
-			var pdfUrl = urlCreator.createObjectURL(blob);
-			win.location.href = pdfUrl;
-		}, {autoPrint: true});
-	} catch (e) {
-		win.close();
-		throw e;
-	}
+	this._openPdf(options, win);
 };
 
-Document.prototype.download = function (defaultFileName, cb) {
+
+Document.prototype.print = function (options, win) {
+	options = options || {};
+	options.autoPrint = true;
+	win = win || null;
+
+	this._openPdf(options, win);
+};
+
+Document.prototype.download = function (defaultFileName, cb, options) {
 	if (typeof defaultFileName === 'function') {
 		cb = defaultFileName;
 		defaultFileName = null;
 	}
 
 	defaultFileName = defaultFileName || 'file.pdf';
-	var that = this;
-	this.getBuffer(function (result) {
-		var blob = that._bufferToBlob(result);
-		saveAs(blob, defaultFileName);
+	this.getBlob(function (result) {
+		saveAs(result, defaultFileName);
 
 		if (typeof cb === 'function') {
 			cb();
 		}
-	});
+	}, options);
 };
 
 Document.prototype.getBase64 = function (cb, options) {
@@ -163,6 +162,17 @@ Document.prototype.getDataUrl = function (cb, options) {
 	}, options);
 };
 
+Document.prototype.getBlob = function (cb, options) {
+	if (!cb) {
+		throw 'getBlob is an async method and needs a callback argument';
+	}
+	var that = this;
+	this.getBuffer(function (result) {
+		var blob = that._bufferToBlob(result);
+		cb(blob);
+	}, options);
+};
+
 Document.prototype.getBuffer = function (cb, options) {
 	if (!cb) {
 		throw 'getBuffer is an async method and needs a callback argument';
@@ -177,6 +187,6 @@ module.exports = {
 		if (!canCreatePdf()) {
 			throw 'Your browser does not provide the level of support needed';
 		}
-		return new Document(docDefinition, window.pdfMake.tableLayouts, window.pdfMake.fonts, window.pdfMake.vfs);
+		return new Document(docDefinition, global.pdfMake.tableLayouts, global.pdfMake.fonts, global.pdfMake.vfs);
 	}
 };

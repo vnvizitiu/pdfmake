@@ -33,7 +33,13 @@ DocumentContext.prototype.beginColumnGroup = function () {
 		availableHeight: this.availableHeight,
 		availableWidth: this.availableWidth,
 		page: this.page,
-		bottomMost: {y: this.y, page: this.page},
+		bottomMost: {
+			x: this.x,
+			y: this.y,
+			availableHeight: this.availableHeight,
+			availableWidth: this.availableWidth,
+			page: this.page
+		},
 		endingCell: this.endingCell,
 		lastColumnWidth: this.lastColumnWidth
 	});
@@ -163,7 +169,7 @@ DocumentContext.prototype.endDetachedBlock = function () {
 function pageOrientation(pageOrientationString, currentPageOrientation) {
 	if (pageOrientationString === undefined) {
 		return currentPageOrientation;
-	} else if (pageOrientationString === 'landscape') {
+	} else if ((typeof pageOrientationString === 'string' || pageOrientationString instanceof String) && (pageOrientationString.toLowerCase() === 'landscape')) {
 		return 'landscape';
 	} else {
 		return 'portrait';
@@ -200,8 +206,14 @@ DocumentContext.prototype.moveToNextPage = function (pageOrientation) {
 	var createNewPage = nextPageIndex >= this.pages.length;
 	if (createNewPage) {
 		var currentAvailableWidth = this.availableWidth;
-		this.addPage(getPageSize(this.getCurrentPage(), pageOrientation));
-		this.availableWidth = currentAvailableWidth;
+		var currentPageOrientation = this.getCurrentPage().pageSize.orientation;
+
+		var pageSize = getPageSize(this.getCurrentPage(), pageOrientation);
+		this.addPage(pageSize);
+
+		if (currentPageOrientation === pageSize.orientation) {
+			this.availableWidth = currentAvailableWidth;
+		}
 	} else {
 		this.page = nextPageIndex;
 		this.initializePage();

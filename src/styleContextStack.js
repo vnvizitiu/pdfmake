@@ -97,7 +97,10 @@ StyleContextStack.prototype.autopush = function (item) {
 		'decorationColor',
 		'background',
 		'lineHeight',
-		'noWrap'
+		'characterSpacing',
+		'noWrap',
+		'markerColor',
+		'leadingIndent'
 			//'tableCellPadding'
 			// 'cellBorder',
 			// 'headerCellBorder',
@@ -148,7 +151,7 @@ StyleContextStack.prototype.getProperty = function (property) {
 		for (var i = this.styleOverrides.length - 1; i >= 0; i--) {
 			var item = this.styleOverrides[i];
 
-			if (typeof item == 'string' || item instanceof String) {
+			if (typeof item === 'string' || item instanceof String) {
 				// named-style-override
 
 				var style = this.styleDictionary[item];

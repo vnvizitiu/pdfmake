@@ -78,17 +78,22 @@ TextTools.prototype.sizeOfString = function (text, styleContextStack) {
 	var bold = getStyleProperty({}, styleContextStack, 'bold', false);
 	var italics = getStyleProperty({}, styleContextStack, 'italics', false);
 	var lineHeight = getStyleProperty({}, styleContextStack, 'lineHeight', 1);
+	var characterSpacing = getStyleProperty({}, styleContextStack, 'characterSpacing', 0);
 
 	var font = this.fontProvider.provideFont(fontName, bold, italics);
 
 	return {
-		width: font.widthOfString(text, fontSize),
+		width: widthOfString(text, font, fontSize, characterSpacing),
 		height: font.lineHeight(fontSize) * lineHeight,
 		fontSize: fontSize,
 		lineHeight: lineHeight,
 		ascender: font.ascender / 1000 * fontSize,
 		descender: font.descender / 1000 * fontSize
 	};
+};
+
+TextTools.prototype.widthOfString = function (text, font, fontSize, characterSpacing) {
+	return widthOfString(text, font, fontSize, characterSpacing);
 };
 
 function splitWords(text, noWrap) {
@@ -133,7 +138,7 @@ function copyStyle(source, destination) {
 	return destination;
 }
 
-function normalizeTextArray(array) {
+function normalizeTextArray(array, styleContextStack) {
 	var results = [];
 
 	if (!Array.isArray(array)) {
@@ -145,11 +150,12 @@ function normalizeTextArray(array) {
 		var style = null;
 		var words;
 
+		var noWrap = getStyleProperty(item || {}, styleContextStack, 'noWrap', false);
 		if (item !== null && (typeof item === 'object' || item instanceof Object)) {
-			words = splitWords(normalizeString(item.text), item.noWrap);
+			words = splitWords(normalizeString(item.text), noWrap);
 			style = copyStyle(item);
 		} else {
-			words = splitWords(normalizeString(item));
+			words = splitWords(normalizeString(item), noWrap);
 		}
 
 		for (var i2 = 0, l2 = words.length; i2 < l2; i2++) {
@@ -206,7 +212,16 @@ function getStyleProperty(item, styleContextStack, property, defaultValue) {
 }
 
 function measure(fontProvider, textArray, styleContextStack) {
-	var normalized = normalizeTextArray(textArray);
+	var normalized = normalizeTextArray(textArray, styleContextStack);
+
+	if (normalized.length) {
+		var leadingIndent = getStyleProperty(normalized[0], styleContextStack, 'leadingIndent', 0);
+
+		if (leadingIndent) {
+			normalized[0].leadingCut = -leadingIndent;
+			normalized[0].leadingIndent = leadingIndent;
+		}
+	}
 
 	normalized.forEach(function (item) {
 		var fontName = getStyleProperty(item, styleContextStack, 'font', 'Roboto');
@@ -219,24 +234,30 @@ function measure(fontProvider, textArray, styleContextStack) {
 		var decorationStyle = getStyleProperty(item, styleContextStack, 'decorationStyle', null);
 		var background = getStyleProperty(item, styleContextStack, 'background', null);
 		var lineHeight = getStyleProperty(item, styleContextStack, 'lineHeight', 1);
+		var characterSpacing = getStyleProperty(item, styleContextStack, 'characterSpacing', 0);
 		var link = getStyleProperty(item, styleContextStack, 'link', null);
+		var linkToPage = getStyleProperty(item, styleContextStack, 'linkToPage', null);
+		var noWrap = getStyleProperty(item, styleContextStack, 'noWrap', null);
+		var preserveLeadingSpaces = getStyleProperty(item, styleContextStack, 'preserveLeadingSpaces', false);
 
 		var font = fontProvider.provideFont(fontName, bold, italics);
 
-		// TODO: character spacing
-		item.width = font.widthOfString(item.text, fontSize);
+		item.width = widthOfString(item.text, font, fontSize, characterSpacing);
 		item.height = font.lineHeight(fontSize) * lineHeight;
 
 		var leadingSpaces = item.text.match(LEADING);
-		var trailingSpaces = item.text.match(TRAILING);
-		if (leadingSpaces) {
-			item.leadingCut = font.widthOfString(leadingSpaces[0], fontSize);
-		} else {
+		
+		if (!item.leadingCut) {
 			item.leadingCut = 0;
 		}
 
+		if (leadingSpaces && !preserveLeadingSpaces) {
+			item.leadingCut += widthOfString(leadingSpaces[0], font, fontSize, characterSpacing);
+		}
+
+		var trailingSpaces = item.text.match(TRAILING);
 		if (trailingSpaces) {
-			item.trailingCut = font.widthOfString(trailingSpaces[0], fontSize);
+			item.trailingCut = widthOfString(trailingSpaces[0], font, fontSize, characterSpacing);
 		} else {
 			item.trailingCut = 0;
 		}
@@ -244,15 +265,22 @@ function measure(fontProvider, textArray, styleContextStack) {
 		item.alignment = getStyleProperty(item, styleContextStack, 'alignment', 'left');
 		item.font = font;
 		item.fontSize = fontSize;
+		item.characterSpacing = characterSpacing;
 		item.color = color;
 		item.decoration = decoration;
 		item.decorationColor = decorationColor;
 		item.decorationStyle = decorationStyle;
 		item.background = background;
 		item.link = link;
+		item.linkToPage = linkToPage;
+		item.noWrap = noWrap;
 	});
 
 	return normalized;
+}
+
+function widthOfString(text, font, fontSize, characterSpacing) {
+	return font.widthOfString(text, fontSize) + ((characterSpacing || 0) * (text.length - 1));
 }
 
 /****TESTS**** (add a leading '/' to uncomment)
